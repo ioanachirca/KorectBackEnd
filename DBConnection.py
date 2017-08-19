@@ -15,11 +15,56 @@ class DBConnection:
 
     def login(self, username, password):
         currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
-        currentCursor.execute("SELECT username, password from users where username='" + username + "'");
+        currentCursor.execute("SELECT username, password from users where username=%s", (username,));
+        returnValue = None;
  
         # display the PostgreSQL database server version
-        data = currentCursor.fetchone()
-        print(data)
+        data = currentCursor.fetchone();
+        print(data);
+        if (data['password'] == password):
+            print("yes");
+            currentCursor.execute("SELECT u_id from users_info where username=%s", (username,));
+            data = currentCursor.fetchone();
+            returnValue = data['u_id'];
+        else:
+            print("no");
+        currentCursor.close();
+        return returnValue;
+
+    def register(self, username, password, utype):
+        print("one")
+        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
+        currentCursor.execute("""BEGIN;
+                                INSERT INTO users ("username","password") VALUES (%s, %s);
+                                INSERT INTO users_info ("username","type","u_id") VALUES (%s, %s, %s);
+                                COMMIT;
+                                """, (username, password, username, utype, 2, ));
+        currentCursor.close();
+
+    def deleteUser(self, username):
+        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
+        currentCursor.execute("""BEGIN;
+                                DELETE FROM users where username=%s;
+                                DELETE FROM users_info where username=%s;
+                                COMMIT;
+                                """, (username, username, ));
+        currentCursor.close();
+
+    def createExam(self, exam_name):
+        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
+        currentCursor.execute("""INSERT INTO exam ("e_id", "name") VALUES (%s, %s)
+                                """, (exam_name, ));
+        currentCursor.close();
+
+    def getExam(self):
+        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
+        currentCursor.execute("""SELECT FROM exam ("e_id", "name")
+                                """);
+        returnValue = None;
+        data = currentCursor.fetchall();
+        print(data);
+        currentCursor.close();
+        return returnValue;
 
     def add_question(self, text, difficulty, subject, is_multiple_answer):
         command = """INSERT INTO questions(text, difficulty, subject, ma)
