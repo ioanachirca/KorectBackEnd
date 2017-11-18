@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import psycopg2
 import psycopg2.extras
 import traceback
@@ -5,7 +6,9 @@ import time
 
 class DBConnection:
     def __init__(self, dbname, user, host, password):
-        self.dbConnection = psycopg2.connect("dbname='"+ dbname + "' user='" + user + "' host='" + host + "' password='" + password +"'");
+        self.dbConnection = psycopg2.connect("dbname='"+ dbname + "' user='" + user + "' host='" +
+                                                host + "' password='" + password +"'")
+
 
     def destroy(self):
         if self.dbConnection is not None:
@@ -13,58 +16,74 @@ class DBConnection:
             print('Database connection closed.')
 
 
+    def truncate_table(self, tableName):
+        cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cursor.execute("TRUNCATE " + tableName + " CASCADE;")
+        self.dbConnection.commit()
+        print("Deleted data from table " + tableName)
+        cursor.close()
+
+
     def login(self, username, password):
-        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
-        currentCursor.execute("SELECT username, password from users where username=%s", (username,));
-        returnValue = None;
+        cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT username, password from users where username=%s", (username,))
+        return_value = None
  
-        # display the PostgreSQL database server version
-        data = currentCursor.fetchone();
-        print(data);
+        data = cursor.fetchone()
+        print(data)
         if (data['password'] == password):
-            print("yes");
-            currentCursor.execute("SELECT u_id from users_info where username=%s", (username,));
-            data = currentCursor.fetchone();
-            returnValue = data['u_id'];
+            print("yes")
+            cursor.execute("SELECT u_id from users_info where username=%s", (username,))
+            data = cursor.fetchone()
+            return_value = data['u_id']
         else:
-            print("no");
-        currentCursor.close();
-        return returnValue;
+            print("no")
+        cursor.close()
+        return return_value
+
 
     def register(self, username, password, utype):
-        print("one")
-        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
-        currentCursor.execute("""BEGIN;
+        cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cursor.execute("""BEGIN;
                                 INSERT INTO users ("username","password") VALUES (%s, %s);
-                                INSERT INTO users_info ("username","type","u_id") VALUES (%s, %s, %s);
-                                COMMIT;
-                                """, (username, password, username, utype, 2, ));
-        currentCursor.close();
+                                INSERT INTO users_info ("username","type") VALUES (%s, %s);
+                                """, (username, password, username, utype, ))
+        self.dbConnection.commit()
+        cursor.close()
 
-    def deleteUser(self, username):
-        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
-        currentCursor.execute("""BEGIN;
+
+    def delete_user(self, username):
+        cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cursor.execute("""BEGIN;
                                 DELETE FROM users where username=%s;
                                 DELETE FROM users_info where username=%s;
-                                COMMIT;
-                                """, (username, username, ));
-        currentCursor.close();
+                                """, (username, username, ))
+        self.dbConnection.commit()
+        cursor.close()
 
-    def createExam(self, exam_name):
-        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
-        currentCursor.execute("""INSERT INTO exam ("e_id", "name") VALUES (%s, %s)
-                                """, (exam_name, ));
-        currentCursor.close();
 
-    def getExam(self):
-        currentCursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor);
-        currentCursor.execute("""SELECT FROM exam ("e_id", "name")
-                                """);
-        returnValue = None;
-        data = currentCursor.fetchall();
-        print(data);
-        currentCursor.close();
-        return returnValue;
+    def add_exam(self, exam_name):
+        cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cursor.execute("""INSERT INTO exams ("name") VALUES (%s)
+                                """, (exam_name, ))
+        self.dbConnection.commit()
+        cursor.close()
+
+
+    def get_exam(self, exam_name):
+        cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cursor.execute("""SELECT * FROM exams WHERE name=%s;""", (exam_name,));
+        return_value = cursor.fetchall()
+        print(return_value)
+        cursor.close()
+        return return_value
+
+    def delete_exam(self, exam_name):
+        cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cursor.execute("""DELETE FROM exams WHERE name=%s;""", (exam_name,))
+        self.dbConnection.commit()
+        cursor.close()
+
 
     def add_question(self, text, difficulty, subject, is_multiple_answer):
         command = """INSERT INTO questions(text, difficulty, subject, ma)
@@ -74,51 +93,56 @@ class DBConnection:
         q_id = cursor.fetchone()
         self.dbConnection.commit()
         cursor.close()
-
         return q_id
 
-    def add_answer(self, q_id, text, is_correct, var):
-        command = """INSERT INTO answers(q_id, text, correct, var)
-                     VALUES (%s, %s, %s, %s);"""
+    def delete_question(self, text):
         cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-        cursor.execute(command, (q_id, text, is_correct, var, ))
+        cursor.execute("""DELETE FROM questions WHERE text=%s;""", (text,))
+        self.dbConnection.commit()
+
+
+    def add_answer_to_question(self, q_text, a_text, is_correct, var):
+        cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cursor.execute("""SELECT q_id FROM questions WHERE text=%s;""", (q_text,))
+        question = cursor.fetchone()
+        if question is None:
+            return
+        q_id = question["q_id"]
+        print(q_id)
+        cursor.execute("""INSERT INTO answers (q_id, text, correct, var) VALUES (%s, %s, %s, %s);""", 
+                            (q_id, a_text, is_correct, var,))       
         self.dbConnection.commit()
         cursor.close()
 
+
     def get_question_with_answers(self, q_id):
-        command = """SELECT * FROM questions WHERE q_id = """ + str(q_id) + """;"""
         cursor = self.dbConnection.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-        cursor.execute(command)
+        cursor.execute("""SELECT * FROM questions WHERE q_id=%s;""", (q_id,))
         question = cursor.fetchone()
-        if question == None:
-            print("No question with id " + str(q_id))
+        if question is None:
+            print("No question with id %s", (q_id,))
+            return []
         else:
             print(question)
-            get_answers_command = """SELECT * FROM answers WHERE q_id = """ + str(q_id) + """;"""
-            cursor.execute(command)
+            cursor.execute("""SELECT * FROM answers WHERE q_id=%s;""", (q_id,))
             answers = cursor.fetchall()
             if answers == []:
-                print("No answers for question " + str(q_id))
+                print("No answers for question %s", (q_id,))
+                return []
             else:
-                print("hah")
+                return [] # rethink this when needed
 
         cursor.close()
 
     
         
-
-
 if __name__ == '__main__':
     try:
-        my_db = DBConnection(dbname='korect', user='postgres', host='localhost', password='postgres');
-        print("ok");
-        #q_id = my_db.add_question("a sau b?", 1, "qw", False)
-        #print("Added question with id " + str(q_id))
-        my_db.get_question_with_answers(2)
+        my_db = DBConnection(dbname='korect', user='postgres', host='localhost', password='postgres')
+        print("OK")
 
     except:
-        print ("EROARE");
-        traceback.print_exc();
+        print ("ERROR")
+        traceback.print_exc()
     finally:
-        my_db.destroy();
-        print('final');
+        my_db.destroy()
